@@ -177,8 +177,9 @@ export default function ModelSelectModal({
             value: fullModel,
           }));
 
-        // For typed kinds, only include hardcoded typed models (aliases are typically LLM-only and lack type info)
-        let combined = aliasModels;
+        // Merge hardcoded models with alias models for LLM context (matches ModelsCard behavior)
+        // For typed kinds, only include hardcoded typed models (aliases are typically LLM-only)
+        let combined;
         if (kindFilter && TYPED_KINDS.has(kindFilter)) {
           combined = getModelsByProviderId(providerId)
             .filter((m) => m.type === kindFilter)
@@ -188,6 +189,32 @@ export default function ModelSelectModal({
             const supports = (providerInfo.serviceKinds || ["llm"]).includes(kindFilter);
             if (supports) combined = [{ id: providerId, name: providerInfo.name, value: alias }];
           }
+        } else {
+          // LLM context: merge hardcoded models + alias models + custom registered models
+          const hardcodedModels = getModelsByProviderId(providerId);
+          const hardcodedIds = new Set(hardcodedModels.map((m) => m.id));
+
+          // Custom alias models (non-duplicate of hardcoded)
+          const customAliasModels = aliasModels.filter((m) => !hardcodedIds.has(m.id));
+
+          // Custom models registered via /api/models/custom
+          const customRegisteredModels = customModels
+            .filter((m) => m.providerAlias === alias && !hardcodedIds.has(m.id))
+            .map((m) => ({ id: m.id, name: m.name || m.id, value: `${alias}/${m.id}`, isCustom: true }));
+
+          combined = [
+            ...hardcodedModels.map((m) => ({ id: m.id, name: m.name, value: `${alias}/${m.id}`, type: m.type })),
+            ...customAliasModels,
+            ...customRegisteredModels,
+          ];
+
+          // Dedupe and filter by kind
+          const seen = new Set();
+          combined = filterByKind(combined.filter((m) => {
+            if (seen.has(m.value)) return false;
+            seen.add(m.value);
+            return true;
+          }));
         }
 
         if (combined.length > 0) {
