@@ -1,3 +1,7 @@
+# v0.4.64 (2026-05-28)
+
+- Provider registry: set `deprecated: false` for Freebuff, restoring full visibility and functionality in the Providers page
+
 # v0.4.63 (2026-05-26)
 
 ## Fixes
