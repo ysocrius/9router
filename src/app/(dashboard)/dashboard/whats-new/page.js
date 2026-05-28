@@ -3,7 +3,12 @@ import React from "react";
 export default function WhatsNewPage() {
   // Fetch the changelog at build time (static generation)
   // For simplicity, we embed the latest change manually.
-  const changelog = `# v0.4.56-private.2 (2026-05-28)
+  const changelog = `# v0.4.56-private.3 (2026-05-28)
+
+## Features
+- MITM Popup Sync: Merged Kilo Code free dynamic models into the popup to match Dashboard counts.
+
+# v0.4.56-private.2 (2026-05-28)
 
 ## Features
 - Model Selector Sync: The MITM proxy "Start Server" pop-up model list now accurately syncs with the Dashboard Models card (merging all hardcoded, alias, and custom registered models seamlessly).
