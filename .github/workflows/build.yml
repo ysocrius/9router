@@ -1,0 +1,50 @@
+name: Build & Release 9Router
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install root deps
+        run: npm ci --ignore-scripts
+
+      - name: Install CLI deps
+        working-directory: ./cli
+        run: npm ci --ignore-scripts
+
+      - name: Build CLI package
+        working-directory: ./cli
+        run: npm run build
+
+      - name: Pack tarball
+        working-directory: ./cli
+        run: npm pack --pack-destination ${{ github.workspace }}
+
+      - name: Get version
+        id: version
+        working-directory: ./cli
+        run: echo "tag=v$(node -p "require('./package.json').version")" >> $GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.version.outputs.tag }}
+          name: ${{ steps.version.outputs.tag }}
+          files: "*.tgz"
+          generate_release_notes: true
+          make_latest: true
