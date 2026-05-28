@@ -137,12 +137,17 @@ console.log("3️⃣  Copying Next.js standalone build to app/cli/app...");
 const standaloneRoot = path.join(appDir, ".next", "standalone");
 const standaloneRootResolved = path.join(buildDistDir, "standalone");
 const standaloneRootToUse = fs.existsSync(standaloneRootResolved) ? standaloneRootResolved : standaloneRoot;
-const standaloneApp = fs.existsSync(path.join(standaloneRootToUse, "server.js"))
-  ? standaloneRootToUse
-  : path.join(standaloneRootToUse, "app");
-if (!fs.existsSync(standaloneApp)) {
+const standaloneCandidates = [
+  standaloneRootToUse,
+  path.join(standaloneRootToUse, "app"),
+  path.join(standaloneRootToUse, path.basename(appDir)),
+];
+const standaloneApp = standaloneCandidates.find((candidate) =>
+  fs.existsSync(path.join(candidate, "server.js")) || fs.existsSync(path.join(candidate, "package.json"))
+);
+if (!standaloneApp) {
   console.error("❌ Next.js standalone build not found under .next/standalone");
-  console.error("Expected either .next/standalone/server.js or .next/standalone/app/");
+  console.error("Expected .next/standalone/server.js, .next/standalone/app/, or .next/standalone/<project>/");
   process.exit(1);
 }
 copyRecursive(standaloneApp, cliAppDir);
@@ -256,10 +261,22 @@ try {
 console.log("✨ CLI package build completed!");
 console.log(`📁 Output: ${cliAppDir}`);
 
+function getDirectorySize(dir) {
+  let total = 0;
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const entryPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      total += getDirectorySize(entryPath);
+    } else {
+      total += fs.statSync(entryPath).size;
+    }
+  }
+  return total;
+}
+
 try {
-  const { execSync: exec } = require("child_process");
-  const size = exec(`du -sh "${cliAppDir}"`, { encoding: "utf8" }).trim();
-  console.log(`📊 Package size: ${size.split("\t")[0]}`);
+  const sizeMb = getDirectorySize(cliAppDir) / (1024 * 1024);
+  console.log(`📊 Package size: ${sizeMb.toFixed(1)}M`);
 } catch (e) {
   // Silent fail on size check
 }
