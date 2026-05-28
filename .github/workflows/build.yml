@@ -25,7 +25,7 @@ jobs:
 
       - name: Install CLI deps
         working-directory: ./cli
-        run: npm ci --ignore-scripts
+        run: npm install --no-audit --no-fund --ignore-scripts
 
       - name: Build CLI package
         working-directory: ./cli
