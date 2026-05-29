@@ -1,3 +1,12 @@
+# v0.4.56-private.9 (2026-05-29)
+
+## Features
+- OmniRoute-Inspired Auto Routing: New virtual routes (`auto`, `auto/coding`, `auto/cheap`, `auto/fast`, `auto/reasoning`) build dynamic fallback model lists from active provider connections at request time. No persisted config or DB schema changes required.
+- Expanded Combo Strategies: Added deterministic `reverse`, plus `random` and `shuffle` ordering modes alongside the existing `fallback` and `round-robin` strategies.
+
+## Notes
+- All existing private features (auth, token refresh, project ID, context compaction, logging, combo fallback) remain intact.
+
 # v0.4.56-private.8 (2026-05-29)
 
 ## Features
@@ -35,6 +44,16 @@
 
 ## Bug Fixes
 - Fixed missing Kilo free models in popup.
+
+# v0.4.56-private.3 (2026-05-28)
+
+## Features
+- MITM Popup Sync: Merged Kilo Code free dynamic models into the popup to match Dashboard counts.
+
+# v0.4.56-private.2 (2026-05-28)
+
+## Features
+- Model Selector Sync: The MITM proxy "Start Server" pop-up model list now accurately syncs with the Dashboard Models card (merging all hardcoded, alias, and custom registered models seamlessly).
 
 # v0.4.56-private.1 (2026-05-28)
 

@@ -3,7 +3,16 @@ import React from "react";
 export default function WhatsNewPage() {
   // Fetch the changelog at build time (static generation)
   // For simplicity, we embed the latest change manually.
-  const changelog = `# v0.4.56-private.8 (2026-05-29)
+  const changelog = `# v0.4.56-private.9 (2026-05-29)
+
+## Features
+- OmniRoute-Inspired Auto Routing: New virtual routes (auto, auto/coding, auto/cheap, auto/fast, auto/reasoning) build dynamic fallback model lists from your active provider connections at request time. No persisted config or DB changes needed.
+- Expanded Combo Strategies: Added deterministic reverse, plus random and shuffle ordering modes alongside the existing fallback and round-robin strategies.
+
+## Notes
+- All existing private features (auth, token refresh, project ID, context compaction, logging, combo fallback) remain intact.
+
+# v0.4.56-private.8 (2026-05-29)
 
 ## Features
 - Context Auto-Compaction: 9Router now automatically prunes older messages when a request approaches the provider's context limit. Prevents Cerebras/Groq 429 TPM errors from oversized conversation histories.
