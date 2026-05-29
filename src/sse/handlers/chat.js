@@ -229,7 +229,22 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       }
     });
 
-    if (result.success) return result.response;
+    if (result.success) {
+      // Inject observability headers when context auto-compaction fired.
+      // NOTE: All token values are heuristic approximations (X-9Router-Token-Estimate: true).
+      if (result.compactionMeta) {
+        const { dropped, tokensBefore, tokensAfter } = result.compactionMeta;
+        const original = result.response;
+        const newHeaders = new Headers(original.headers);
+        newHeaders.set("X-9Router-Compacted", "true");
+        newHeaders.set("X-9Router-Compacted-Messages", String(dropped));
+        newHeaders.set("X-9Router-Original-Tokens", String(tokensBefore));
+        newHeaders.set("X-9Router-Tokens-After", String(tokensAfter));
+        newHeaders.set("X-9Router-Token-Estimate", "true");
+        return new Response(original.body, { status: original.status, headers: newHeaders });
+      }
+      return result.response;
+    }
 
     // Mark account unavailable (auto-calculates cooldown with exponential backoff, or precise resetsAtMs)
     const { shouldFallback } = await markAccountUnavailable(credentials.connectionId, result.status, result.error, provider, model, result.resetsAtMs);

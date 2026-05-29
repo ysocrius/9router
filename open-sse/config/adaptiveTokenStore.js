@@ -13,7 +13,7 @@
 
 import { DEFAULT_MAX_TOKENS } from "./runtimeConfig.js";
 
-const MIN_ADAPTIVE_TOKENS = 4096;
+const MIN_ADAPTIVE_TOKENS = 500;
 const COOLDOWN_MS = 30 * 60 * 1000; // 30 minutes before retrying higher
 
 // Map<"provider:model", { maxTokens, previousMaxTokens, reducedAt, reductions }>
@@ -90,7 +90,7 @@ export function isTokenLimitError(errorText, statusCode) {
 
   // Status codes that commonly accompany token limits
   // 400 (bad request), 413 (payload too large), 422 (unprocessable)
-  const isLikelyStatus = !statusCode || statusCode === 400 || statusCode === 413 || statusCode === 422;
+  const isLikelyStatus = !statusCode || statusCode === 400 || statusCode === 413 || statusCode === 422 || statusCode === 429;
 
   if (!isLikelyStatus) return false;
 
@@ -110,6 +110,10 @@ export function isTokenLimitError(errorText, statusCode) {
     /input.*too.*long/i,
     /maximum.*length/i,
     /invalid.*argument/i,
+    /token.*quota/i,
+    /quota.*exceed/i,
+    /capacity.*available/i,
+    /resource.*exhausted/i,
   ];
 
   return patterns.some(p => p.test(text));

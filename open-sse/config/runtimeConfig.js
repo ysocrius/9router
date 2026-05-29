@@ -35,8 +35,8 @@ export const MEMORY_CONFIG = {
 export const STREAM_STALL_TIMEOUT_MS = 3 * 60 * 1000;
 
 // Default token limits
-export const DEFAULT_MAX_TOKENS = 64000;
-export const DEFAULT_MIN_TOKENS = 32000;
+export const DEFAULT_MAX_TOKENS = process.env.MAX_TOKENS ? parseInt(process.env.MAX_TOKENS, 10) : 64000;
+export const DEFAULT_MIN_TOKENS = process.env.MIN_TOKENS ? parseInt(process.env.MIN_TOKENS, 10) : 4096;
 
 // Retry config for 429 responses (legacy - kept for backward compatibility)
 export const RETRY_CONFIG = {

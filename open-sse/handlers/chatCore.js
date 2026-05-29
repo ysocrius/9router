@@ -20,6 +20,9 @@ import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
 import { recordTokenLimitFailure, isTokenLimitError, getAdaptiveMaxTokens } from "../config/adaptiveTokenStore.js";
+import { adjustMaxTokens } from "../translator/helpers/maxTokensHelper.js";
+import { DEFAULT_MAX_TOKENS } from "../config/runtimeConfig.js";
+import { compactContext } from "../compactor/contextCompactor.js";
 
 /**
  * Core chat handler - shared between SSE and Worker
@@ -94,6 +97,8 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   } else {
     translatedBody = translateRequest(sourceFormat, targetFormat, model, body, stream, credentials, provider, reqLogger, stripList, connectionId, clientTool);
     if (!translatedBody) {
+  // Apply universal max_tokens adjustment
+  translatedBody.max_tokens = adjustMaxTokens(translatedBody);
       trackPendingRequest(model, provider, connectionId, false, true);
       return createErrorResult(HTTP_STATUS.BAD_REQUEST, `Failed to translate request for ${sourceFormat} → ${targetFormat}`);
     }
@@ -120,6 +125,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   const rtkLine = formatRtkLog(rtkStats);
   if (rtkLine) console.log(rtkLine);
 
+  // Context Auto-Compaction: prune oldest messages when prompt exceeds provider input budget
+  const compactionResult = compactContext(translatedBody, provider);
+  if (compactionResult.error) {
+    trackPendingRequest(model, provider, connectionId, false, true);
+    return createErrorResult(HTTP_STATUS.BAD_REQUEST, compactionResult.error.error.message, compactionResult.error);
+  }
+  // compactionMeta is threaded through result objects so callers can inject X-9Router-Compacted headers
+  const compactionMeta = compactionResult.compacted ? compactionResult : null;
+  if (compactionMeta) {
+    translatedBody = compactionResult.body;
+    log?.info?.(
+      "COMPACT",
+      `${provider.toUpperCase()} | ${model} | dropped=${compactionResult.dropped} msgs | ` +
+      `tokens: ${compactionResult.tokensBefore} → ${compactionResult.tokensAfter}`
+    );
+  }
+
   // Caveman: inject terse-style system prompt
   if (cavemanEnabled && cavemanLevel) {
     injectCaveman(translatedBody, finalFormat, cavemanLevel);
@@ -131,7 +153,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   appendRequestLog({ model, provider, connectionId, status: "PENDING" }).catch(() => { });
 
   // Adaptive token reduction state
-  const maxTokensUsed = translatedBody.max_tokens || getAdaptiveMaxTokens(provider, model) || 64000;
+  const maxTokensUsed = translatedBody.max_tokens || getAdaptiveMaxTokens(provider, model) || DEFAULT_MAX_TOKENS;
 
   const msgCount = translatedBody.messages?.length || translatedBody.input?.length || translatedBody.contents?.length || translatedBody.request?.contents?.length || 0;
   log?.debug?.("REQUEST", `${provider.toUpperCase()} | ${model} | ${msgCount} msgs`);
@@ -180,7 +202,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
 
   // Execute request (with adaptive token retry on token-limit errors)
   let providerResponse, providerUrl, providerHeaders, finalBody;
-  const MAX_ADAPTIVE_RETRIES = 3;
+  const MAX_ADAPTIVE_RETRIES = 6;
   for (let attempt = 0; attempt <= MAX_ADAPTIVE_RETRIES; attempt++) {
     try {
       const result = await executor.execute({ model, body: translatedBody, stream, credentials, signal: streamController.signal, log, proxyOptions });
@@ -268,7 +290,7 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
     let currentStatusCode = statusCode;
 
     // Check if this is a token-limit error worth retrying
-    while (!providerResponse.ok && isTokenLimitError(currentMessage, currentStatusCode) && currentLimit > 4096 && attempt < 4) {
+    while (!providerResponse.ok && isTokenLimitError(currentMessage, currentStatusCode) && currentLimit > 500 && attempt < 6) {
       attempt++;
       const newLimit = recordTokenLimitFailure(provider, model, currentLimit);
       log?.warn?.("ADAPTIVE", `${provider.toUpperCase()} | ${model} | token limit error ${currentStatusCode} → retry #${attempt} with max_tokens=${newLimit} (was ${currentLimit})`);
@@ -329,22 +351,24 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Provider forced streaming but client wants JSON
   if (!clientRequestedStreaming && providerRequiresStreaming) {
     const result = await handleForcedSSEToJson({ ...sharedCtx, providerResponse, sourceFormat, trackDone, appendLog });
-    if (result) { streamController.handleComplete(); return result; }
+    if (result) { streamController.handleComplete(); return { ...result, compactionMeta }; }
   }
 
   // True non-streaming response
   if (!stream) {
     const result = await handleNonStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat, reqLogger, toolNameMap, trackDone, appendLog });
     streamController.handleComplete();
-    return result;
+    return { ...result, compactionMeta };
   }
 
   // Streaming response
   const { onStreamComplete } = buildOnStreamComplete({ ...sharedCtx });
-  return handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, streamController, onStreamComplete });
+  const streamResult = handleStreamingResponse({ ...sharedCtx, providerResponse, sourceFormat, targetFormat, userAgent, reqLogger, toolNameMap, streamController, onStreamComplete });
+  return { ...streamResult, compactionMeta };
 }
 
 export function isTokenExpiringSoon(expiresAt, bufferMs = 5 * 60 * 1000) {
   if (!expiresAt) return false;
   return new Date(expiresAt).getTime() - Date.now() < bufferMs;
 }
+
