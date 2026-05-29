@@ -55,4 +55,14 @@ describe("combo round-robin routing", () => {
     expect(getRotatedModels(models, "code-xhigh", "fallback", 2)).toEqual(models);
     expect(getRotatedModels(models, "code-xhigh", "fallback", 2)).toEqual(models);
   });
+
+  it("supports reverse strategy", () => {
+    const models = ["provider/model-a", "provider/model-b", "provider/model-c"];
+
+    expect(getRotatedModels(models, "code-xhigh", "reverse", 2)).toEqual([
+      "provider/model-c",
+      "provider/model-b",
+      "provider/model-a",
+    ]);
+  });
 });
