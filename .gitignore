@@ -26,6 +26,9 @@ product
 # packaged tarball build artifacts (npm pack output)
 *.tgz
 
+# local-only scratch/debug archive (never commit; may contain secrets)
+._archive/
+
 # misc
 .DS_Store
 *.pem
