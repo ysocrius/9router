@@ -5,6 +5,11 @@ export const DETECT_WINDOW = 1024;             // autodetect peeks first N chars
 export const GIT_DIFF_HUNK_MAX_LINES = 100;    // per-hunk line cap
 export const GIT_DIFF_CONTEXT_KEEP = 3;        // context lines around changes
 export const DEDUP_LINE_MAX = 2000;            // dedupLog truncation cap
+export const DEDUP_RUN_THRESHOLD = 3;          // collapse runs of >= N identical lines (rtk/dedup.js)
+
+// Structured decision log (rtk/decisionLog.js). Off by default; flip to true to
+// emit one JSON record per request describing every compression decision.
+export const RTK_DECISION_LOG = process.env.RTK_DECISION_LOG === "1";
 
 // Rust pipe_cmd.rs parity caps
 export const GREP_PER_FILE_MAX = 10;           // match rust: matches.iter().take(10)

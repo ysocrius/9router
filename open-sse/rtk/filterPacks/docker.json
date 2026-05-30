@@ -1,0 +1,12 @@
+{
+  "name": "docker",
+  "match": {
+    "commandPrefixes": ["docker"],
+    "keywords": ["CONTAINER ID", "IMAGE ID", "REPOSITORY"]
+  },
+  "maxLines": 200,
+  "rules": [
+    { "dropMatching": "^\\s*$" },
+    { "pattern": "[ \\t]{2,}", "flags": "g", "replacement": "  " }
+  ]
+}

@@ -19,6 +19,7 @@ import { detectClientTool, isNativePassthrough } from "../utils/clientDetector.j
 import { dedupeTools } from "../utils/toolDeduper.js";
 import { injectCaveman } from "../rtk/caveman.js";
 import { compressMessages, formatRtkLog } from "../rtk/index.js";
+import { runCompressionPipeline, formatPipelineLog } from "../rtk/pipeline.js";
 import { recordTokenLimitFailure, isTokenLimitError, getAdaptiveMaxTokens } from "../config/adaptiveTokenStore.js";
 import { adjustMaxTokens } from "../translator/helpers/maxTokensHelper.js";
 import { DEFAULT_MAX_TOKENS } from "../config/runtimeConfig.js";
@@ -31,7 +32,7 @@ import { compactContext } from "../compactor/contextCompactor.js";
  * @param {object} options.credentials - Provider credentials
  * @param {string} options.sourceFormatOverride - Override detected source format (e.g. "openai-responses")
  */
-export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, cavemanEnabled, cavemanLevel, sourceFormatOverride, providerThinking }) {
+export async function handleChatCore({ body, modelInfo, credentials, log, onCredentialsRefreshed, onRequestSuccess, onDisconnect, clientRawRequest, connectionId, userAgent, apiKey, ccFilterNaming, rtkEnabled, cavemanEnabled, cavemanLevel, inputCavemanEnabled, sourceFormatOverride, providerThinking }) {
   const { provider, model } = modelInfo;
   const requestStartTime = Date.now();
 
@@ -120,10 +121,23 @@ export async function handleChatCore({ body, modelInfo, credentials, log, onCred
   // Covers both passthrough (source shape) and translated (target shape) flows
   const finalFormat = passthrough ? sourceFormat : targetFormat;
 
-  // RTK: compress tool_result content
-  const rtkStats = compressMessages(translatedBody, rtkEnabled);
-  const rtkLine = formatRtkLog(rtkStats);
-  if (rtkLine) console.log(rtkLine);
+  // RTK + optional stacked input-side Caveman: applied at the final body.
+  // Pipeline mode (input-side Caveman, DEFAULT OFF) stacks RTK -> cavemanText
+  // with marginal savings accounting. When the opt-in flag is off, the legacy
+  // RTK-only path runs and behavior is byte-identical to before.
+  if (rtkEnabled && inputCavemanEnabled) {
+    const pipelineReport = runCompressionPipeline(translatedBody, {
+      steps: ["rtk", "cavemanText"],
+      inputCaveman: true,
+      cavemanOptions: { intensity: cavemanLevel === "lite" ? "lite" : "full" },
+    });
+    const pipelineLine = formatPipelineLog(pipelineReport);
+    if (pipelineLine) console.log(pipelineLine);
+  } else {
+    const rtkStats = compressMessages(translatedBody, rtkEnabled);
+    const rtkLine = formatRtkLog(rtkStats);
+    if (rtkLine) console.log(rtkLine);
+  }
 
   // Context Auto-Compaction: prune oldest messages when prompt exceeds provider input budget
   const compactionResult = compactContext(translatedBody, provider);

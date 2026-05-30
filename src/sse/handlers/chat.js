@@ -231,6 +231,9 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
       rtkEnabled: !!chatSettings.rtkEnabled,
       cavemanEnabled: !!chatSettings.cavemanEnabled,
       cavemanLevel: chatSettings.cavemanLevel || "full",
+      // Input-side Caveman is OFF by default (locked decision): only the stacked
+      // rtk -> cavemanText pipeline activates it, and only when explicitly enabled.
+      inputCavemanEnabled: !!chatSettings.inputCavemanEnabled,
       providerThinking,
       // Detect source format by endpoint + body
       sourceFormatOverride: request?.url ? detectFormatByEndpoint(new URL(request.url).pathname, body) : null,

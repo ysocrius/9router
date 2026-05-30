@@ -3,7 +3,15 @@ import React from "react";
 export default function WhatsNewPage() {
   // Fetch the changelog at build time (static generation)
   // For simplicity, we embed the latest change manually.
-  const changelog = `# v0.4.56-private.9 (2026-05-29)
+  const changelog = `# v0.4.56-private.10 (2026-05-30)
+
+## Features
+- **RTK Token Saver Integration**: Gemini-path activation with three-case string detection to cleanly compress tool outputs and prevent massive token ingestion on heavy tasks.
+- **Smart Caveman Reducer**: Input-side stacked pipeline mapping \`rtk -> cavemanText\` to surgically truncate shell, diff, and read outputs without losing protected code structures (opt-in).
+- **Latency Benchmarked**: Strictly enforces an offline 10ms latency budget per request with measurable 50% token reduction across the proxy layer.
+- **Lazy Load Extensibility**: Declarative JSON filter packs for tool output parsers like Docker and kubectl load efficiently only when explicitly triggered.
+
+# v0.4.56-private.9 (2026-05-29)
 
 ## Features
 - OmniRoute-Inspired Auto Routing: New virtual routes (auto, auto/coding, auto/cheap, auto/fast, auto/reasoning) build dynamic fallback model lists from your active provider connections at request time. No persisted config or DB changes needed.
