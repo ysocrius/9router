@@ -29,6 +29,9 @@ product
 # local-only scratch/debug archive (never commit; may contain secrets)
 ._archive/
 
+# local-only working notes (kept on disk, not published)
+notes/
+
 # misc
 .DS_Store
 *.pem
