@@ -10,6 +10,9 @@ function rowToKey(row) {
     machineId: row.machineId,
     isActive: row.isActive === 1 || row.isActive === true,
     createdAt: row.createdAt,
+    seatConnectionId: row.seatConnectionId || null,
+    monthlyRequestLimit: row.monthlyRequestLimit ?? null,
+    monthlyCreditLimit: row.monthlyCreditLimit ?? null,
   };
 }
 
@@ -25,11 +28,18 @@ export async function getApiKeyById(id) {
   return rowToKey(row);
 }
 
-export async function createApiKey(name, machineId) {
+export async function getApiKeyByValue(key) {
+  const db = await getAdapter();
+  const row = db.get(`SELECT * FROM apiKeys WHERE key = ?`, [key]);
+  return rowToKey(row);
+}
+
+export async function createApiKey(name, machineId, opts = {}) {
   if (!machineId) throw new Error("machineId is required");
   const db = await getAdapter();
   const { generateApiKeyWithMachine } = await import("@/shared/utils/apiKey");
   const result = generateApiKeyWithMachine(machineId);
+  const { seatConnectionId = null, monthlyRequestLimit = null, monthlyCreditLimit = null } = opts;
   const apiKey = {
     id: uuidv4(),
     name,
@@ -37,10 +47,15 @@ export async function createApiKey(name, machineId) {
     machineId,
     isActive: true,
     createdAt: new Date().toISOString(),
+    seatConnectionId,
+    monthlyRequestLimit,
+    monthlyCreditLimit,
   };
   db.run(
-    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt) VALUES(?, ?, ?, ?, ?, ?)`,
-    [apiKey.id, apiKey.key, apiKey.name, apiKey.machineId, 1, apiKey.createdAt]
+    `INSERT INTO apiKeys(id, key, name, machineId, isActive, createdAt, seatConnectionId, monthlyRequestLimit, monthlyCreditLimit)
+     VALUES(?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    [apiKey.id, apiKey.key, apiKey.name, apiKey.machineId, 1, apiKey.createdAt,
+     apiKey.seatConnectionId, apiKey.monthlyRequestLimit, apiKey.monthlyCreditLimit]
   );
   return apiKey;
 }
@@ -53,8 +68,11 @@ export async function updateApiKey(id, data) {
     if (!row) return;
     const merged = { ...rowToKey(row), ...data };
     db.run(
-      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ? WHERE id = ?`,
-      [merged.key, merged.name, merged.machineId, merged.isActive ? 1 : 0, id]
+      `UPDATE apiKeys SET key = ?, name = ?, machineId = ?, isActive = ?,
+       seatConnectionId = ?, monthlyRequestLimit = ?, monthlyCreditLimit = ? WHERE id = ?`,
+      [merged.key, merged.name, merged.machineId, merged.isActive ? 1 : 0,
+       merged.seatConnectionId ?? null, merged.monthlyRequestLimit ?? null,
+       merged.monthlyCreditLimit ?? null, id]
     );
     result = merged;
   });

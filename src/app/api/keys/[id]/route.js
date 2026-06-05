@@ -21,7 +21,7 @@ export async function PUT(request, { params }) {
   try {
     const { id } = await params;
     const body = await request.json();
-    const { isActive } = body;
+    const { isActive, seatConnectionId, monthlyRequestLimit, monthlyCreditLimit } = body;
 
     const existing = await getApiKeyById(id);
     if (!existing) {
@@ -30,6 +30,9 @@ export async function PUT(request, { params }) {
 
     const updateData = {};
     if (isActive !== undefined) updateData.isActive = isActive;
+    if (seatConnectionId !== undefined) updateData.seatConnectionId = seatConnectionId;
+    if (monthlyRequestLimit !== undefined) updateData.monthlyRequestLimit = monthlyRequestLimit;
+    if (monthlyCreditLimit !== undefined) updateData.monthlyCreditLimit = monthlyCreditLimit;
 
     const updated = await updateApiKey(id, updateData);
 

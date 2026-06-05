@@ -19,6 +19,9 @@ import { detectFormatByEndpoint } from "open-sse/translator/formats.js";
 import * as log from "../utils/logger.js";
 import { updateProviderCredentials, checkAndRefreshToken } from "../services/tokenRefresh.js";
 import { getProjectIdForConnection } from "open-sse/services/projectId.js";
+import { getApiKeyByValue } from "@/lib/localDb";
+import { getCachedSeatCredit } from "@/lib/seatCreditCache.js";
+import { getKeyRequestsThisCycle } from "@/lib/db/repos/usageCycleRepo.js";
 
 /**
  * Handle chat completion request
@@ -158,13 +161,17 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
   // Extract userAgent from request
   const userAgent = request?.headers?.get("user-agent") || "";
 
+  // Seat binding: look up the key row to pin to a specific connection and enforce caps
+  const keyRow = apiKey ? await getApiKeyByValue(apiKey) : null;
+  const preferredConnectionId = keyRow?.seatConnectionId || null;
+
   // Try with available accounts (fallback on errors)
   const excludeConnectionIds = new Set();
   let lastError = null;
   let lastStatus = null;
 
   while (true) {
-    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model);
+    const credentials = await getProviderCredentials(provider, excludeConnectionIds, model, { preferredConnectionId });
 
     // All accounts unavailable
     if (!credentials || credentials.allRateLimited) {
@@ -184,6 +191,25 @@ async function handleSingleModelChat(body, modelStr, clientRawRequest = null, re
 
     // Log account selection
     log.info("AUTH", `\x1b[32mUsing ${provider} account: ${credentials.connectionName}\x1b[0m`);
+
+    // ── Seat cap enforcement ─────────────────────────────────────────────
+    if (keyRow?.monthlyCreditLimit && credentials.connectionId === keyRow.seatConnectionId) {
+      const credit = await getCachedSeatCredit(keyRow.seatConnectionId);
+      if (credit && credit.used >= keyRow.monthlyCreditLimit) {
+        return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS,
+          `Monthly credit cap reached (${credit.used} / ${keyRow.monthlyCreditLimit}). Resets ${credit.resetAt ? new Date(credit.resetAt).toLocaleDateString() : "next cycle"}.`);
+      }
+    }
+    if (keyRow?.monthlyRequestLimit && keyRow?.id) {
+      const resetIso = await getCachedSeatCredit(keyRow.seatConnectionId).then(c => c?.resetAt).catch(() => null)
+        || new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString();
+      const requests = await getKeyRequestsThisCycle(keyRow.id, resetIso);
+      if (requests >= keyRow.monthlyRequestLimit) {
+        return errorResponse(HTTP_STATUS.TOO_MANY_REQUESTS,
+          `Monthly request cap reached (${requests} / ${keyRow.monthlyRequestLimit}). Resets next billing cycle.`);
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────
 
     const refreshedCredentials = await checkAndRefreshToken(provider, credentials);
 

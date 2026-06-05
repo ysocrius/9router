@@ -62,6 +62,15 @@ export default function APIPageClient({ machineId }) {
   const [createdKey, setCreatedKey] = useState(null);
   const [confirmState, setConfirmState] = useState(null);
 
+  // Seat/cap fields for key creation
+  const [connections, setConnections] = useState([]);
+  const [newKeySeat, setNewKeySeat] = useState("");
+  const [newKeyCapMode, setNewKeyCapMode] = useState("none");
+  const [newKeyCapLimit, setNewKeyCapLimit] = useState("");
+  // Share modal
+  const [shareKey, setShareKey] = useState(null);
+  const [shareRevealed, setShareRevealed] = useState(false);
+
   const [requireApiKey, setRequireApiKey] = useState(false);
   const [requireLogin, setRequireLogin] = useState(true);
   const [hasPassword, setHasPassword] = useState(true);
@@ -326,10 +335,15 @@ export default function APIPageClient({ machineId }) {
 
   const fetchData = async () => {
     try {
-      const keysRes = await fetch("/api/keys");
+      const [keysRes, connRes] = await Promise.all([
+        fetch("/api/keys"),
+        fetch("/api/providers"),
+      ]);
       const keysData = await keysRes.json();
-      if (keysRes.ok) {
-        setKeys(keysData.keys || []);
+      if (keysRes.ok) setKeys(keysData.keys || []);
+      if (connRes.ok) {
+        const connData = await connRes.json();
+        setConnections((connData.connections || []).filter(c => c.isActive !== false));
       }
     } catch (error) {
       console.log("Error fetching data:", error);
@@ -680,19 +694,24 @@ export default function APIPageClient({ machineId }) {
 
   const handleCreateKey = async () => {
     if (!newKeyName.trim()) return;
-
     try {
+      const body = { name: newKeyName };
+      if (newKeySeat) body.seatConnectionId = newKeySeat;
+      if (newKeySeat && newKeyCapMode === "request" && newKeyCapLimit) body.monthlyRequestLimit = parseInt(newKeyCapLimit, 10);
+      if (newKeySeat && newKeyCapMode === "credit" && newKeyCapLimit) body.monthlyCreditLimit = parseInt(newKeyCapLimit, 10);
       const res = await fetch("/api/keys", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: newKeyName }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-
       if (res.ok) {
         setCreatedKey(data.key);
         await fetchData();
         setNewKeyName("");
+        setNewKeySeat("");
+        setNewKeyCapMode("none");
+        setNewKeyCapLimit("");
         setShowAddModal(false);
       }
     } catch (error) {
@@ -1188,6 +1207,13 @@ export default function APIPageClient({ machineId }) {
                     title={key.isActive ? "Pause key" : "Resume key"}
                   />
                   <button
+                    onClick={() => { setShareKey(key); setShareRevealed(false); }}
+                    className="p-2 hover:bg-primary/10 rounded text-text-muted hover:text-primary opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
+                    title="Share"
+                  >
+                    <span className="material-symbols-outlined text-[18px]">share</span>
+                  </button>
+                  <button
                     onClick={() => handleDeleteKey(key.id)}
                     className="p-2 hover:bg-red-500/10 rounded text-red-500 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-all"
                   >
@@ -1216,6 +1242,43 @@ export default function APIPageClient({ machineId }) {
             onChange={(e) => setNewKeyName(e.target.value)}
             placeholder="Production Key"
           />
+          {connections.length > 0 && (
+            <div>
+              <label className="text-xs font-medium text-text-muted mb-1 block">Bind to Kiro Seat (optional)</label>
+              <select
+                value={newKeySeat}
+                onChange={(e) => { setNewKeySeat(e.target.value); setNewKeyCapMode("none"); setNewKeyCapLimit(""); }}
+                className="w-full rounded-lg border border-border bg-surface px-3 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
+              >
+                <option value="">No seat binding</option>
+                {connections.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name || c.email || c.id.slice(0, 8)}</option>
+                ))}
+              </select>
+            </div>
+          )}
+          {newKeySeat && (
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-medium text-text-muted">Monthly Cap</label>
+              <div className="flex gap-2">
+                {[{v:"none",l:"No cap"},{v:"request",l:"Requests"},{v:"credit",l:"Credits"}].map(opt => (
+                  <button key={opt.v} onClick={() => setNewKeyCapMode(opt.v)}
+                    className={`flex-1 px-2 py-1.5 rounded border text-xs font-medium transition-colors ${newKeyCapMode === opt.v ? "bg-primary text-white border-primary" : "border-border text-text-muted hover:bg-surface-2"}`}>
+                    {opt.l}
+                  </button>
+                ))}
+              </div>
+              {newKeyCapMode !== "none" && (
+                <Input
+                  label={newKeyCapMode === "request" ? "Max requests / month" : "Max Kiro credits / month"}
+                  value={newKeyCapLimit}
+                  onChange={(e) => setNewKeyCapLimit(e.target.value)}
+                  placeholder={newKeyCapMode === "request" ? "e.g. 1000" : "e.g. 2000"}
+                  type="number"
+                />
+              )}
+            </div>
+          )}
           <div className="flex gap-2">
             <Button onClick={handleCreateKey} fullWidth disabled={!newKeyName.trim()}>
               Create
@@ -1268,6 +1331,56 @@ export default function APIPageClient({ machineId }) {
           </Button>
         </div>
       </Modal>
+
+      {/* Share Key Modal */}
+      {shareKey && (() => {
+        const bestUrl = (tsEnabled && tsUrl) ? tsUrl
+          : (tunnelEnabled && (tunnelPublicUrl || tunnelUrl)) ? (tunnelPublicUrl || tunnelUrl)
+          : baseUrl.replace("/v1", "");
+        const isTunnel = tunnelEnabled && !tsEnabled && !!(tunnelPublicUrl || tunnelUrl);
+        const endpoint = `${bestUrl}/v1`;
+        const k = shareKey.key;
+        const openaiSnippet = `OPENAI_API_KEY=${k}\nOPENAI_BASE_URL=${endpoint}`;
+        const hermesSnippet = `providers:\n  - name: 9router\n    base_url: ${endpoint}\n    api_key: ${k}`;
+        const openclawSnippet = JSON.stringify([{ name: "9router", base_url: endpoint, api_key: k }], null, 2);
+        return (
+          <Modal isOpen={!!shareKey} title={`Share — ${shareKey.name}`} onClose={() => setShareKey(null)}>
+            <div className="flex flex-col gap-4">
+              {isTunnel && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded bg-amber-500/10 border border-amber-300/30 text-xs text-amber-600 dark:text-amber-400">
+                  <span className="material-symbols-outlined text-sm">warning</span>
+                  Tunnel URL changes on restart. Prefer Tailscale for a stable URL.
+                </div>
+              )}
+              <div>
+                <p className="text-xs font-medium text-text-muted mb-1">Endpoint</p>
+                <div className="flex gap-2">
+                  <Input value={endpoint} readOnly className="flex-1 font-mono text-sm" />
+                  <Button variant="secondary" icon={copied === `ep_${shareKey.id}` ? "check" : "content_copy"} onClick={() => copy(endpoint, `ep_${shareKey.id}`)}>Copy</Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-text-muted mb-1">API Key</p>
+                <div className="flex gap-2">
+                  <Input value={shareRevealed ? k : maskKey(k)} readOnly className="flex-1 font-mono text-sm" />
+                  <button onClick={() => setShareRevealed(r => !r)} className="p-2 rounded border border-border text-text-muted hover:text-primary transition-colors">
+                    <span className="material-symbols-outlined text-[18px]">{shareRevealed ? "visibility_off" : "visibility"}</span>
+                  </button>
+                  <Button variant="secondary" icon={copied === `key_${shareKey.id}` ? "check" : "content_copy"} onClick={() => copy(k, `key_${shareKey.id}`)}>Copy</Button>
+                </div>
+              </div>
+              <div>
+                <p className="text-xs font-medium text-text-muted mb-2">Copy as config</p>
+                <div className="flex gap-2 flex-wrap">
+                  <Button size="sm" variant="ghost" icon={copied === `oai_${shareKey.id}` ? "check" : "content_copy"} onClick={() => copy(openaiSnippet, `oai_${shareKey.id}`)}>OpenAI env vars</Button>
+                  <Button size="sm" variant="ghost" icon={copied === `hm_${shareKey.id}` ? "check" : "content_copy"} onClick={() => copy(hermesSnippet, `hm_${shareKey.id}`)}>Hermes config.yaml</Button>
+                  <Button size="sm" variant="ghost" icon={copied === `oc_${shareKey.id}` ? "check" : "content_copy"} onClick={() => copy(openclawSnippet, `oc_${shareKey.id}`)}>OpenClaw models.json</Button>
+                </div>
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
 
       {/* Enable Tunnel Modal */}
       <Modal

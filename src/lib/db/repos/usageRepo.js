@@ -729,3 +729,37 @@ export async function getRecentLogs(limit = 200) {
     return [];
   }
 }
+
+/**
+ * Returns all active seat-bound API keys with their seat name, mode, and limit.
+ * Used by GET /api/usage/monthly to power the billing-cycle pivot table.
+ */
+export async function getMonthlyUsageByUser() {
+  const db = await getAdapter();
+  const rows = db.all(`
+    SELECT
+      ak.id          AS keyId,
+      ak.name        AS keyName,
+      ak.key         AS keyValue,
+      ak.seatConnectionId,
+      ak.monthlyRequestLimit,
+      ak.monthlyCreditLimit,
+      pc.name        AS seatName
+    FROM apiKeys ak
+    LEFT JOIN providerConnections pc ON pc.id = ak.seatConnectionId
+    WHERE ak.isActive = 1
+      AND ak.seatConnectionId IS NOT NULL
+    ORDER BY ak.createdAt ASC
+  `);
+
+  return rows.map((r) => ({
+    keyId: r.keyId,
+    keyName: r.keyName,
+    keyValue: r.keyValue,
+    seatConnectionId: r.seatConnectionId,
+    seatName: r.seatName || r.seatConnectionId?.slice(0, 8) || "unknown",
+    mode: r.monthlyCreditLimit != null ? "kiro-credit" : "request-count",
+    limit: r.monthlyCreditLimit ?? r.monthlyRequestLimit ?? 0,
+  }));
+}
+

@@ -16,6 +16,7 @@ import OverviewCards from "@/app/(dashboard)/dashboard/usage/components/Overview
 import UsageTable, { fmt, fmtTime } from "@/app/(dashboard)/dashboard/usage/components/UsageTable";
 import ProviderTopology from "@/app/(dashboard)/dashboard/usage/components/ProviderTopology";
 import UsageChart from "@/app/(dashboard)/dashboard/usage/components/UsageChart";
+import UserMonthTable from "@/app/(dashboard)/dashboard/usage/components/UserMonthTable";
 
 function timeAgo(timestamp) {
   const diff = Math.floor((Date.now() - new Date(timestamp)) / 1000);
@@ -179,6 +180,7 @@ const TABLE_OPTIONS = [
   { value: "account", label: "Usage by Account" },
   { value: "apiKey", label: "Usage by API Key" },
   { value: "endpoint", label: "Usage by Endpoint" },
+  { value: "monthly", label: "Usage by User (Billing Cycle)" },
 ];
 
 const PERIODS = [
@@ -468,22 +470,26 @@ export default function UsageStats({ period: periodProp, setPeriod: setPeriodPro
               <option key={opt.value} value={opt.value}>{opt.label}</option>
             ))}
           </select>
-          <div className="grid grid-cols-2 items-center gap-1 rounded-lg border border-border bg-bg-subtle p-1 sm:flex">
-            <button
-              onClick={() => setViewMode("costs")}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "costs" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
-            >
-              Costs
-            </button>
-            <button
-              onClick={() => setViewMode("tokens")}
-              className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "tokens" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
-            >
-              Tokens
-            </button>
-          </div>
+          {tableView !== "monthly" && (
+            <div className="grid grid-cols-2 items-center gap-1 rounded-lg border border-border bg-bg-subtle p-1 sm:flex">
+              <button
+                onClick={() => setViewMode("costs")}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "costs" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
+              >
+                Costs
+              </button>
+              <button
+                onClick={() => setViewMode("tokens")}
+                className={`px-3 py-1 rounded-md text-sm font-medium transition-colors ${viewMode === "tokens" ? "bg-primary text-white shadow-sm" : "text-text-muted hover:text-text hover:bg-bg-hover"}`}
+              >
+                Tokens
+              </button>
+            </div>
+          )}
         </div>
-        {loading ? spinner : activeTableConfig && (
+        {loading ? spinner : tableView === "monthly" ? (
+          <UserMonthTable />
+        ) : activeTableConfig && (
           <UsageTable
             title=""
             columns={activeTableConfig.columns}
