@@ -3,7 +3,12 @@ import React from "react";
 export default function WhatsNewPage() {
   // Fetch the changelog at build time (static generation)
   // For simplicity, we embed the latest change manually.
-  const changelog = `# v0.4.56-private.12 (2026-06-05)
+  const changelog = `# v0.4.56-private.13 (2026-06-05)
+
+## Bugfixes
+- Fixed a server crash (TypeError) when routing requests for seat-bound keys due to a missing internal export.
+
+# v0.4.56-private.12 (2026-06-05)
 
 ## Features
 - **Kiro Seat Sharing**: Bind any API key to a specific Kiro seat. Requests from that key are pinned to the bound seat, bypassing the normal round-robin selector.
